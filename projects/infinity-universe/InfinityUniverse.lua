@@ -1,4 +1,4 @@
--- Infinity Universe 0.1.1 | Mengy777 / 876osamuha
+-- Infinity Universe 0.1.2 | Mengy777 / 876osamuha
 -- WindUI (MIT): https://github.com/Footagesus/WindUI
 local env = getgenv and getgenv() or _G
 local previous = env.InfinityUniverse
@@ -105,19 +105,21 @@ local ok, message = xpcall(function()
         app.Unload()
     end)
     local tab = window:Tab({ Title = "Полёт", Icon = "feather" })
-    tab:Toggle({
+    local flightToggle = tab:Toggle({
         Title = "Полёт", Desc = "WASD · Space вверх · Ctrl вниз", Value = false,
         Callback = function(value)
+            if not app.alive then return end
             app.enabled = value == true
             if not app.enabled then stopFlight() end
         end,
     })
     local speedInput
     local syncingSpeed = false
-    tab:Slider({
+    local speedSlider = tab:Slider({
         Title = "Скорость", Step = 1, IsTextbox = false,
         Value = { Min = 5, Max = 500, Default = 60 },
         Callback = function(value)
+            if not app.alive then return end
             local number = parseSpeed(value)
             if not number then return end
             app.speed = math.clamp(number, 5, 500)
@@ -132,7 +134,7 @@ local ok, message = xpcall(function()
         Title = "Точная скорость", Value = "60", Placeholder = "Например: 1200",
         Desc = "Любое неотрицательное число · выше 500 — вручную",
         Callback = function(value)
-            if syncingSpeed then return end
+            if not app.alive or syncingSpeed then return end
             local number = parseSpeed(value)
             if number then
                 app.speed = number
@@ -143,6 +145,29 @@ local ok, message = xpcall(function()
                 WindUI:Notify({ Title = "Скорость", Content = "Введите неотрицательное число", Duration = 3 })
             end
         end,
+    })
+    function app.Reset()
+        if not app.alive then return end
+        app.enabled = false
+        stopFlight()
+        app.speed = 60
+        flightToggle:Set(false)
+        speedSlider:Set(60)
+        syncingSpeed = true
+        speedInput:Set("60")
+        syncingSpeed = false
+    end
+    -- Keep Settings last when adding more categories.
+    local settings = window:Tab({ Title = "Настройки", Icon = "settings" })
+    settings:Button({
+        Title = "Сбросить настройки", Icon = "rotate-ccw",
+        Desc = "Выключить полёт и вернуть скорость 60",
+        Callback = function() app.Reset() end,
+    })
+    settings:Button({
+        Title = "Выгрузить скрипт", Icon = "power",
+        Desc = "Полностью убрать Infinity Universe",
+        Callback = function() app.Unload() end,
     })
     local function down(key) return Input:IsKeyDown(key) and 1 or 0 end
     table.insert(connections, player.CharacterRemoving:Connect(stopFlight))
