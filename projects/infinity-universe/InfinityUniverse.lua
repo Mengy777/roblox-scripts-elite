@@ -1,4 +1,4 @@
--- Infinity Universe 0.1.0 | Mengy777 / 876osamuha
+-- Infinity Universe 0.1.1 | Mengy777 / 876osamuha
 -- WindUI (MIT): https://github.com/Footagesus/WindUI
 local env = getgenv and getgenv() or _G
 local previous = env.InfinityUniverse
@@ -11,6 +11,20 @@ local player = Players.LocalPlayer
 assert(player, "Infinity Universe: LocalPlayer unavailable")
 
 local app = { alive = true, enabled = false, speed = 60 }
+-- Numerical guard, not a claim about Roblox's achievable physical speed.
+-- Squared Vector3 components stay finite at this bound.
+local MAX_FLIGHT_SPEED = 1e18
+local function parseSpeed(value)
+    local text = tostring(value):match("^%s*(.-)%s*$")
+    local number = tonumber(text)
+    if not number or number ~= number or number < 0 then return nil end
+    if number == math.huge then
+        -- Accept numeric overflow, but reject explicit inf/nan spellings.
+        if not text:find("%d") or text:lower():find("inf", 1, true) then return nil end
+        return MAX_FLIGHT_SPEED
+    end
+    return math.min(number, MAX_FLIGHT_SPEED)
+end
 local connections, flight, window = {}, nil, nil
 local function stopFlight()
     local old = flight
@@ -98,12 +112,36 @@ local ok, message = xpcall(function()
             if not app.enabled then stopFlight() end
         end,
     })
+    local speedInput
+    local syncingSpeed = false
     tab:Slider({
-        Title = "Скорость", Step = 1, IsTextbox = true,
-        Value = { Min = 10, Max = 300, Default = 60 },
+        Title = "Скорость", Step = 1, IsTextbox = false,
+        Value = { Min = 5, Max = 500, Default = 60 },
         Callback = function(value)
-            local number = tonumber(value)
-            if number and number == number then app.speed = math.clamp(number, 10, 300) end
+            local number = parseSpeed(value)
+            if not number then return end
+            app.speed = math.clamp(number, 5, 500)
+            if speedInput then
+                syncingSpeed = true
+                speedInput:Set(tostring(app.speed))
+                syncingSpeed = false
+            end
+        end,
+    })
+    speedInput = tab:Input({
+        Title = "Точная скорость", Value = "60", Placeholder = "Например: 1200",
+        Desc = "Любое неотрицательное число · выше 500 — вручную",
+        Callback = function(value)
+            if syncingSpeed then return end
+            local number = parseSpeed(value)
+            if number then
+                app.speed = number
+                if number == MAX_FLIGHT_SPEED then
+                    WindUI:Notify({ Title = "Скорость", Content = "Применён числовой предел: 1e18", Duration = 3 })
+                end
+            elseif tostring(value):match("%S") then
+                WindUI:Notify({ Title = "Скорость", Content = "Введите неотрицательное число", Duration = 3 })
+            end
         end,
     })
     local function down(key) return Input:IsKeyDown(key) and 1 or 0 end
